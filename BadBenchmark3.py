@@ -8,6 +8,7 @@ from pulp import HiGHS
 import pytups as pt
 import highspy
 import numpy as np
+import bisect
 
 f = open('Dataset3.txt', 'r').read()
 f= f.replace("\n", " ")
@@ -32,9 +33,9 @@ CapBuckets=[]
 AvailibleSurg=[]
 
 CutoffPercentile=0.2
-HardCutoff=100
+HardCutoff=50
 
-Cutoff=min(CutoffPercentile*num_surg,200)
+Cutoff=min(CutoffPercentile*num_surg,100)
 
 
 BucketIndices=[]
@@ -46,55 +47,138 @@ for i in range(num_rooms*num_days):
     BucketIndices.append([])
 
 usedSurgList=[]
+notUsedSurgList=[]
+for i in range(len(AvailibleSurg)):
+    notUsedSurgList.append(AvailibleSurg[i][0])
 
-def PopulateBuckets(FillTolerance):
-    print("Relaxation1",len(usedSurgList),num_surg)
+def PopulateBuckets(FillTolerance,GoodFillTolerance):
     for i in range(len(CapBuckets)):
         for j in range(len(AvailibleSurg)):
+
             tempSurg = AvailibleSurg[j][1]
             if ((num_surg-len(usedSurgList))>Cutoff and AvailibleSurg[j][0] not in usedSurgList):
                 # print(j,CapBuckets[i],tempSurg,AvailibleSurg[j])
                 # print("Check",AvailibleSurg[j][1],CapBuckets[i],[i,j])
+
+                lowestBucketCap=100000
+                StartDayIndex = int(np.floor(i / num_rooms) * num_rooms)
+                for n in range(num_rooms):
+                    if(CapBuckets[StartDayIndex+n]<lowestBucketCap):
+                        lowestBucketCap=CapBuckets[StartDayIndex+n]
+
+
+
                 if (tempSurg >= cap and cap == CapBuckets[i]):
                     # print("Pass1",[i,j])
                     CapBuckets[i] -= tempSurg
                     usedSurgList.append(AvailibleSurg[j][0])
                     BucketIndices[i].append(AvailibleSurg[j][0])
-                elif (i % 2 == 1 and CapBuckets[i] - tempSurg >= CapBuckets[i - 1]):
+                    notUsedSurgList.remove(AvailibleSurg[j][0])
+                elif (CapBuckets[i] - tempSurg >= lowestBucketCap):
                     # print("Pass2", [i, j])
                     CapBuckets[i] -= tempSurg
                     usedSurgList.append(AvailibleSurg[j][0])
                     BucketIndices[i].append(AvailibleSurg[j][0])
-                elif (CapBuckets[i] - tempSurg >= FillTolerance):
+                elif (CapBuckets[i] - tempSurg >= FillTolerance and AvailibleSurg[j][0] not in usedSurgList):
                     # print("Pass3", [i, j])
                     CapBuckets[i] -= tempSurg
                     usedSurgList.append(AvailibleSurg[j][0])
                     BucketIndices[i].append(AvailibleSurg[j][0])
-                # else:
-                #     print("Pass4", [i, j])
+                    notUsedSurgList.remove(AvailibleSurg[j][0])
+                elif (AvailibleSurg[j][0] not in usedSurgList):
+                    j=CheckGoodNextFill(i, GoodFillTolerance,j)
+                else:
+                    print("Pass4", [i, j])
 
-PopulateBuckets(cap/5)
+def CheckGoodNextFill(BucketIndex,GoodFillTolerance,currentIndex):
+
+    remainingCap=CapBuckets[BucketIndex]
+    lowestBucketCap = 100000
+    StartDayIndex = int(np.floor(BucketIndex / num_rooms) * num_rooms)
+    for n in range(num_rooms):
+        if (CapBuckets[StartDayIndex + n] < lowestBucketCap):
+            lowestBucketCap = CapBuckets[StartDayIndex + n]
+
+    if(lowestBucketCap<0):
+        remainingCap=CapBuckets[BucketIndex]-lowestBucketCap
+
+    MiddleIndex=-1
+    for i in range(len(AvailibleSurg)):
+        if(AvailibleSurg[i][0] not in usedSurgList):
+            if (remainingCap - AvailibleSurg[i][1])<=GoodFillTolerance:
+                if((remainingCap-AvailibleSurg[i][1])>=0):
+                    print("BiggestChosen",CapBuckets[BucketIndex], AvailibleSurg[i][1])
+                    CapBuckets[BucketIndex]-=AvailibleSurg[i][1]
+                    usedSurgList.append(AvailibleSurg[i][0])
+                    BucketIndices[BucketIndex].append(AvailibleSurg[i][0])
+                    notUsedSurgList.remove(AvailibleSurg[i][0])
+                    return 0
+
+            if(AvailibleSurg[i][1]<remainingCap/2 and MiddleIndex==-1):
+                MiddleIndex=i
+                # print("Middle",MiddleIndex,AvailibleSurg[i-1][1],AvailibleSurg[i][1],remainingCap/2)
+
+    if(MiddleIndex==-1):
+        return currentIndex
+
+    for i in range(max(0,MiddleIndex-20), MiddleIndex):
+        for j in range(MiddleIndex,min(MiddleIndex+20,len(AvailibleSurg))):
+    # for i in range(0, MiddleIndex):
+    #     for j in reversed(range(MiddleIndex, len(AvailibleSurg))):
+
+            if (AvailibleSurg[i][0] not in usedSurgList and AvailibleSurg[j][0] not in usedSurgList):
+                # print("CheckNotTooSmall",AvailibleSurg[j][1],sortedsurglist[round(-len(sortedsurglist)/5)][1],len(sortedsurglist)/5,sortedsurglist)
+                if(AvailibleSurg[j][1]>sortedsurglist[round(-len(sortedsurglist)/5)][1]):
+                    if (AvailibleSurg[i][1] < sortedsurglist[round(len(sortedsurglist) / 5)][1]):
+                        if(remainingCap -(AvailibleSurg[i][1]+AvailibleSurg[j][1])<=GoodFillTolerance):
+                            if(remainingCap -(AvailibleSurg[i][1]+AvailibleSurg[j][1])>=0):
+
+                                print("MiddleChosen",remainingCap,GoodFillTolerance,AvailibleSurg[i][1],AvailibleSurg[j][1])
+                                # print("LengthLists",len(usedSurgList),num_surg-len(notUsedSurgList))
+                                CapBuckets[BucketIndex] -= AvailibleSurg[j][1]
+                                usedSurgList.append(AvailibleSurg[j][0])
+                                BucketIndices[BucketIndex].append(AvailibleSurg[j][0])
+                                notUsedSurgList.remove(AvailibleSurg[j][0])
+                                CapBuckets[BucketIndex] -= AvailibleSurg[i][1]
+                                usedSurgList.append(AvailibleSurg[i][0])
+                                BucketIndices[BucketIndex].append(AvailibleSurg[i][0])
+                                notUsedSurgList.remove(AvailibleSurg[i][0])
+                                return 0
+
+    return currentIndex
+
+
+
+PopulateBuckets(cap/5,0)
+
+# PopulateBuckets(cap/5)
 
 if(num_surg-len(usedSurgList)>HardCutoff):
-    PopulateBuckets(0)
+    print("Relaxation1",len(usedSurgList),num_surg)
+    PopulateBuckets(cap/5,1)
 
 if(num_surg-len(usedSurgList)>HardCutoff):
-    PopulateBuckets(-cap/50)
+    print("Relaxation2",len(usedSurgList),num_surg)
+    PopulateBuckets(0,cap/200)
 
 if(num_surg-len(usedSurgList)>HardCutoff):
-    PopulateBuckets(-cap/20)
+    print("Relaxation3",len(usedSurgList),num_surg)
+    PopulateBuckets(-cap/50,cap/200)
 
 if(num_surg-len(usedSurgList)>HardCutoff):
-    PopulateBuckets(-cap/10)
+    print("Relaxation4",len(usedSurgList),num_surg)
+    PopulateBuckets(-cap/20,cap/200)
 
 if(num_surg-len(usedSurgList)>HardCutoff):
-    PopulateBuckets(-cap/5)
+    print("Relaxation5",len(usedSurgList),num_surg)
+    PopulateBuckets(-cap/10,cap/200)
+
+if(num_surg-len(usedSurgList)>HardCutoff):
+    print("Relaxation6",len(usedSurgList),num_surg)
+    PopulateBuckets(-cap/5,cap/100)
 
 
-notUsedSurgList=[]
-for i in range(len(AvailibleSurg)):
-    if(AvailibleSurg[i][0] not in usedSurgList):
-        notUsedSurgList.append(AvailibleSurg[i][0])
+
 print("UsedSurg",usedSurgList,len(usedSurgList),num_surg)
 print("CapBuckets",min(CapBuckets),CapBuckets)
 print("NotUsedSurg",max(notUsedSurgList),notUsedSurgList)
@@ -134,7 +218,7 @@ for i in range(len(BucketIndices)):
 
 prob = LpProblem("Problem_1", LpMinimize)
 
-x= LpVariable.dicts("x", [1,2], lowBound=0, cat="Integer")
+# x= LpVariable.dicts("x", [1,2], lowBound=0, cat="Integer")
 
 # print(x)
 
@@ -181,16 +265,6 @@ for i in range(num_surg):
 for r in range(num_rooms):
     for t in range(num_days):
         prob+= M_t[t]>=O_rt[r,t]
-
-for i in range(num_surg):
-    prob += pulp.lpSum(X_irt[i,r,t] for r in range(num_rooms) for t in range(num_days))==1
-
-for r in range(num_rooms):
-    for t in range(num_days):
-        prob += O_rt[r,t]>=0
-
-for t in range(num_days):
-    prob += M_t[t] >= 0
 
 #Heuristic Constraint
 

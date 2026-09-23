@@ -102,10 +102,13 @@ for var in prob.variables():
             newName=var.name.replace(")","").split("(")[1].split(",_")
             # print(newName)
             for i in range(len(newName)):
-                if(i!=0):
-                    resultLog+= newName[i]+" "
-                else:
-                    resultLog += str(int(newName[i])+1) + " "
+                if(i==0):
+                    resultLog += str(int(newName[i]) + 1) + " "
+                if(i==1):
+                    resultLog+= newName[i+1]+" "
+                if (i==2):
+                    resultLog += newName[i-1] + " "
+
             resultLog+= '\n'
 
 print(resultLog)
