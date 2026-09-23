@@ -15,16 +15,16 @@ for i in range(4,round((len(f))/2+2)):
     print(f[i])
     index=i-4
     surglist.append([int(f[2*index+4]),int(f[2*index+5])])
+    # surglist.append(int(f[2*index+5]))
 
-
-
-print(surglist)
+sortedsurglist= sorted(surglist, key=lambda x:x[1])
+print(sortedsurglist)
 
 prob = LpProblem("Problem_1", LpMinimize)
 
 x= LpVariable.dicts("x", [1,2], lowBound=0, cat="Integer")
 
-print(x)
+# print(x)
 
 
 #Variables
@@ -95,14 +95,17 @@ resultLog+="Surgery Day OR"
 resultLog+='\n'
 
 for var in prob.variables():
-    print(f"{var.name} =",  "cat =", var.cat, var.varValue)
-    print(var.name[0])
+    # print(f"{var.name} =",  "cat =", var.cat, var.varValue)
+    # print(var.name[0])
     if(var.name[0]=="D"):
         if(var.varValue==1):
             newName=var.name.replace(")","").split("(")[1].split(",_")
-            print(newName)
-            for name in newName:
-                resultLog+= name+" "
+            # print(newName)
+            for i in range(len(newName)):
+                if(i!=0):
+                    resultLog+= newName[i]+" "
+                else:
+                    resultLog += str(int(newName[i])+1) + " "
             resultLog+= '\n'
 
 print(resultLog)
