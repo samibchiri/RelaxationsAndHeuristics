@@ -9,7 +9,8 @@ import pytups as pt
 import highspy
 import numpy as np
 
-f = open('Dataset3.txt', 'r').read()
+DatasetNum=3
+f = open(f'Dataset{DatasetNum}.txt', 'r').read()
 f= f.replace("\n", " ")
 f = f.split(" ",)
 
@@ -237,5 +238,5 @@ print(resultLog)
 
 print(FixedX_irt[4][1][0])
 
-with open('SolutionDataset1Group0.txt', 'w') as fp:
+with open(f'SolutionDataset{DatasetNum}Group0.txt', 'w') as fp:
     fp.write(resultLog)
